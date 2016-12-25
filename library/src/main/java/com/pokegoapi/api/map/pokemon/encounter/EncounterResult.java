@@ -17,13 +17,11 @@ package com.pokegoapi.api.map.pokemon.encounter;
 
 import POGOProtos.Data.Capture.CaptureProbabilityOuterClass;
 import POGOProtos.Data.PokemonDataOuterClass;
-import POGOProtos.Map.Pokemon.WildPokemonOuterClass;
 import POGOProtos.Networking.Responses.EncounterResponseOuterClass.EncounterResponse;
 
 
-
 public interface EncounterResult {
-	
+
 	boolean wasSuccessful();
 
 	EncounterResponse.Status getStatus();

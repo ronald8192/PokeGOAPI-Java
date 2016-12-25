@@ -16,6 +16,7 @@
 package com.pokegoapi.auth;
 
 import POGOProtos.Networking.Envelopes.RequestEnvelopeOuterClass.RequestEnvelope.AuthInfo;
+import com.pokegoapi.exceptions.CaptchaActiveException;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
 import com.pokegoapi.util.Log;
@@ -57,10 +58,12 @@ public class GoogleCredentialProvider extends CredentialProvider {
 	 *
 	 * @param client       OkHttp client
 	 * @param refreshToken Refresh Token Persisted by user
-	 * @throws LoginFailedException When login fails
+	 * @throws LoginFailedException  When login fails
+	 * @throws RemoteServerException if the server failed to respond
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	public GoogleCredentialProvider(OkHttpClient client, String refreshToken)
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		this.client = client;
 		this.refreshToken = refreshToken;
 		onGoogleLoginOAuthCompleteListener = null;
@@ -74,10 +77,11 @@ public class GoogleCredentialProvider extends CredentialProvider {
 	 * @param client                             OkHttp client
 	 * @param onGoogleLoginOAuthCompleteListener Callback to know verification url and also persist refresh token
 	 * @throws LoginFailedException When login fails
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	public GoogleCredentialProvider(OkHttpClient client,
 									OnGoogleLoginOAuthCompleteListener onGoogleLoginOAuthCompleteListener)
-			throws LoginFailedException {
+			throws LoginFailedException, CaptchaActiveException {
 		this.client = client;
 		if (onGoogleLoginOAuthCompleteListener != null) {
 			this.onGoogleLoginOAuthCompleteListener = onGoogleLoginOAuthCompleteListener;
@@ -92,9 +96,12 @@ public class GoogleCredentialProvider extends CredentialProvider {
 	 * Given the refresh token fetches a new access token and returns AuthInfo.
 	 *
 	 * @param refreshToken Refresh token persisted by the user after initial login
-	 * @throws LoginFailedException If we fail to get tokenId
+	 * @throws LoginFailedException  If we fail to get tokenId
+	 * @throws RemoteServerException if the server failed to respond
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public void refreshToken(String refreshToken) throws LoginFailedException, RemoteServerException {
+	public void refreshToken(String refreshToken)
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		HttpUrl url = HttpUrl.parse(OAUTH_TOKEN_ENDPOINT).newBuilder()
 				.addQueryParameter("client_id", CLIENT_ID)
 				.addQueryParameter("client_secret", SECRET)
@@ -134,8 +141,11 @@ public class GoogleCredentialProvider extends CredentialProvider {
 
 	/**
 	 * Starts a login flow for google using googles device oauth endpoint.
+	 *
+	 * @throws LoginFailedException If we fail to get tokenId
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public void login() throws LoginFailedException {
+	public void login() throws LoginFailedException, CaptchaActiveException {
 
 		HttpUrl url = HttpUrl.parse(OAUTH_ENDPOINT).newBuilder()
 				.addQueryParameter("client_id", CLIENT_ID)
@@ -191,7 +201,15 @@ public class GoogleCredentialProvider extends CredentialProvider {
 		refreshToken = googleAuthTokenJson.getRefreshToken();
 	}
 
-
+	/**
+	 * Get the google auth token json from the google auth json
+	 *
+	 * @param json google auth json
+	 * @return google auth token json
+	 * @throws URISyntaxException   syntax exception
+	 * @throws IOException          io exception
+	 * @throws LoginFailedException If we fail to get tokenId
+	 */
 	private GoogleAuthTokenJson poll(GoogleAuthJson json) throws URISyntaxException, IOException, LoginFailedException {
 		HttpUrl url = HttpUrl.parse(OAUTH_TOKEN_ENDPOINT).newBuilder()
 				.addQueryParameter("client_id", CLIENT_ID)
@@ -221,7 +239,7 @@ public class GoogleCredentialProvider extends CredentialProvider {
 	}
 
 	@Override
-	public String getTokenId() throws LoginFailedException, RemoteServerException {
+	public String getTokenId() throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		if (isTokenIdExpired()) {
 			refreshToken(refreshToken);
 		}
@@ -232,10 +250,11 @@ public class GoogleCredentialProvider extends CredentialProvider {
 	 * Refreshes tokenId if it has expired
 	 *
 	 * @return AuthInfo object
-	 * @throws LoginFailedException When login fails
+	 * @throws LoginFailedException  When login fails
+	 * @throws RemoteServerException if the server failed to respond
 	 */
 	@Override
-	public AuthInfo getAuthInfo() throws LoginFailedException, RemoteServerException {
+	public AuthInfo getAuthInfo() throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		if (isTokenIdExpired()) {
 			refreshToken(refreshToken);
 		}
@@ -246,11 +265,7 @@ public class GoogleCredentialProvider extends CredentialProvider {
 
 	@Override
 	public boolean isTokenIdExpired() {
-		if (System.currentTimeMillis() > expiresTimestamp) {
-			return true;
-		} else {
-			return false;
-		}
+		return System.currentTimeMillis() > expiresTimestamp;
 	}
 
 	/**

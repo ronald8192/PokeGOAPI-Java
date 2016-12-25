@@ -30,6 +30,7 @@ import POGOProtos.Networking.Responses.StartGymBattleResponseOuterClass.StartGym
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.pokegoapi.api.PokemonGo;
 import com.pokegoapi.api.pokemon.Pokemon;
+import com.pokegoapi.exceptions.CaptchaActiveException;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
 import com.pokegoapi.main.ServerRequest;
@@ -39,12 +40,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Battle {
-	private Gym gym;
-	private Pokemon[] team;
-	private List<BattlePokemonInfo> bteam;
+	private final Gym gym;
+	private final Pokemon[] teams;
+	private final List<BattlePokemonInfo> bteam = new ArrayList<>();
 	private StartGymBattleResponse battleResponse;
-	private PokemonGo api;
-	private List<Integer> gymIndex;
+	private final PokemonGo api;
+	private final List<Integer> gymIndex = new ArrayList<>();
 	@Getter
 	private boolean concluded;
 	@Getter
@@ -52,20 +53,18 @@ public class Battle {
 
 	/**
 	 * New battle to track the state of a battle.
+	 *
 	 * @param api The api instance to submit requests with.
-     * @param team The Pokemon to use for attacking in the battle.
-     * @param gym The Gym to fight at.
+	 * @param teams The Pokemon to use for attacking in the battle.
+	 * @param gym The Gym to fight at.
 	 */
-	public Battle(PokemonGo api, Pokemon[] team, Gym gym) {
-		this.team = team;
+	public Battle(PokemonGo api, Pokemon[] teams, Gym gym) {
+		this.teams = teams;
 		this.gym = gym;
 		this.api = api;
 
-		this.bteam = new ArrayList<BattlePokemonInfo>();
-		this.gymIndex = new ArrayList<>();
-
-		for (int i = 0; i < team.length; i++) {
-			bteam.add(this.createBattlePokemon(team[i]));
+		for (Pokemon team : teams) {
+			bteam.add(this.createBattlePokemon(team));
 		}
 	}
 
@@ -73,15 +72,15 @@ public class Battle {
 	 * Start a battle.
 	 *
 	 * @return Result of the attempt to start
-     * @throws LoginFailedException  if the login failed
-     * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws LoginFailedException if the login failed
+	 * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public Result start() throws LoginFailedException, RemoteServerException {
-
+	public Result start() throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		Builder builder = StartGymBattleMessageOuterClass.StartGymBattleMessage.newBuilder();
 
-		for (int i = 0; i < team.length; i++) {
-			builder.addAttackingPokemonIds(team[i].getId());
+		for (Pokemon team : teams) {
+			builder.addAttackingPokemonIds(team.getId());
 		}
 
 
@@ -104,7 +103,6 @@ public class Battle {
 		// need to send blank action
 		this.sendBlankAction();
 
-
 		for (BattleAction action : battleResponse.getBattleLog().getBattleActionsList()) {
 			gymIndex.add(action.getTargetIndex());
 		}
@@ -113,19 +111,19 @@ public class Battle {
 	}
 
 
-
-
 	/**
 	 * Attack a gym.
 	 *
 	 * @param times the amount of times to attack
 	 * @return Battle
-     * @throws LoginFailedException  if the login failed
-     * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws LoginFailedException if the login failed
+	 * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public AttackGymResponse attack(int times) throws LoginFailedException, RemoteServerException {
+	public AttackGymResponse attack(int times)
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 
-		ArrayList<BattleAction> actions = new ArrayList<BattleAction>();
+		ArrayList<BattleAction> actions = new ArrayList<>();
 
 		for (int i = 0; i < times; i++) {
 			BattleAction action = BattleAction
@@ -138,28 +136,23 @@ public class Battle {
 			actions.add(action);
 		}
 
-		AttackGymResponse result = doActions(actions);
-
-
-
-		return result;
+		return doActions(actions);
 	}
 
 
 	/**
 	 * Creates a battle pokemon object to send with the request.
 	 *
-	 * @Param Pokemon
+	 * @param pokemon the battle pokemon
 	 * @return BattlePokemonInfo
 	 */
 	private BattlePokemonInfo createBattlePokemon(Pokemon pokemon) {
-		BattlePokemonInfo info = BattlePokemonInfo
-									.newBuilder()
-									.setCurrentEnergy(0)
-									.setCurrentHealth(100)
-									.setPokemonData(pokemon.getDefaultInstanceForType())
-									.build();
-		return info;
+		return BattlePokemonInfo
+				.newBuilder()
+				.setCurrentEnergy(0)
+				.setCurrentHealth(100)
+				.setPokemonData(pokemon.getDefaultInstanceForType())
+				.build();
 	}
 
 	/**
@@ -168,7 +161,8 @@ public class Battle {
 	 * @param index of defender(0 to gym lever)
 	 * @return Battle
 	 */
-	private PokemonDataOuterClass.PokemonData getDefender(int index) throws LoginFailedException, RemoteServerException {
+	private PokemonDataOuterClass.PokemonData getDefender(int index)
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return gym.getGymMembers().get(0).getPokemonData();
 	}
 
@@ -189,7 +183,8 @@ public class Battle {
 	 *
 	 * @return AttackGymResponse
 	 */
-	private AttackGymResponse sendBlankAction() throws LoginFailedException, RemoteServerException {
+	private AttackGymResponse sendBlankAction()
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		AttackGymMessage message = AttackGymMessage
 				.newBuilder()
 				.setGymId(gym.getId())
@@ -216,20 +211,20 @@ public class Battle {
 	 * @param actions list of actions to send in this request
 	 * @return AttackGymResponse
 	 */
-	private AttackGymResponse doActions(List<BattleAction> actions) throws LoginFailedException, RemoteServerException {
+	private AttackGymResponse doActions(List<BattleAction> actions)
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 
 
 		AttackGymMessage.Builder message = AttackGymMessage
-									.newBuilder()
-									.setGymId(gym.getId())
-									.setPlayerLatitude(api.getLatitude())
-									.setPlayerLongitude(api.getLongitude())
-									.setBattleId(battleResponse.getBattleId());
+				.newBuilder()
+				.setGymId(gym.getId())
+				.setPlayerLatitude(api.getLatitude())
+				.setPlayerLongitude(api.getLongitude())
+				.setBattleId(battleResponse.getBattleId());
 
 		for (BattleAction action : actions) {
 			message.addAttackActions(action);
 		}
-
 
 
 		ServerRequest serverRequest = new ServerRequest(RequestType.ATTACK_GYM, message.build());
@@ -240,13 +235,12 @@ public class Battle {
 			AttackGymResponse response = AttackGymResponse.parseFrom(serverRequest.getData());
 
 			if (response.getBattleLog().getState() == BattleState.DEFEATED
-						|| response.getBattleLog().getState() == BattleState.VICTORY
-						|| response.getBattleLog().getState() == BattleState.TIMED_OUT) {
+					|| response.getBattleLog().getState() == BattleState.VICTORY
+					|| response.getBattleLog().getState() == BattleState.TIMED_OUT) {
 				concluded = true;
 			}
 
 			outcome = response.getBattleLog().getState();
-
 
 
 			return response;

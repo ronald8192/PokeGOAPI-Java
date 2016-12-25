@@ -23,29 +23,30 @@ import POGOProtos.Networking.Responses.UseItemEggIncubatorResponseOuterClass.Use
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.pokegoapi.api.PokemonGo;
 import com.pokegoapi.api.pokemon.EggPokemon;
+import com.pokegoapi.exceptions.CaptchaActiveException;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
 import com.pokegoapi.main.ServerRequest;
 
 public class EggIncubator {
 	private final EggIncubatorOuterClass.EggIncubator proto;
-	private final PokemonGo pgo;
+	private final PokemonGo api;
 
 	/**
 	 * Create new EggIncubator with given proto.
 	 *
-	 * @param pgo   the api
+	 * @param api   the api
 	 * @param proto the proto
 	 */
-	public EggIncubator(PokemonGo pgo, EggIncubatorOuterClass.EggIncubator proto) {
-		this.pgo = pgo;
+	public EggIncubator(PokemonGo api, EggIncubatorOuterClass.EggIncubator proto) {
+		this.api = api;
 		this.proto = proto;
 	}
 
 	/**
 	 * Returns the remaining uses.
 	 *
-	 * @return uses remaining
+	 * @return uses remaining, always 0 for infinite egg incubator
 	 */
 	public int getUsesRemaining() {
 		return proto.getUsesRemaining();
@@ -58,17 +59,18 @@ public class EggIncubator {
 	 * @return status of putting egg in incubator
 	 * @throws RemoteServerException the remote server exception
 	 * @throws LoginFailedException  the login failed exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	public UseItemEggIncubatorResponse.Result hatchEgg(EggPokemon egg)
-			throws LoginFailedException, RemoteServerException {
-		
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
+
 		UseItemEggIncubatorMessage reqMsg = UseItemEggIncubatorMessage.newBuilder()
 				.setItemId(proto.getId())
 				.setPokemonId(egg.getId())
 				.build();
 
 		ServerRequest serverRequest = new ServerRequest(RequestTypeOuterClass.RequestType.USE_ITEM_EGG_INCUBATOR, reqMsg);
-		pgo.getRequestHandler().sendServerRequests(serverRequest);
+		api.getRequestHandler().sendServerRequests(serverRequest);
 
 		UseItemEggIncubatorResponse response;
 		try {
@@ -77,94 +79,95 @@ public class EggIncubator {
 			throw new RemoteServerException(e);
 		}
 
-		pgo.getInventories().updateInventories(true);
+		api.getInventories().updateInventories(true);
 
 		return response.getResult();
 	}
-	
+
 	/**
 	 * Get incubator id.
-	 * 
+	 *
 	 * @return the id
 	 */
 	public String getId() {
 		return proto.getId();
 	}
-	
+
 	/**
 	 * Get incubator type.
-	 * 
+	 *
 	 * @return EggIncubatorType
 	 */
 	public EggIncubatorType getType() {
 		return proto.getIncubatorType();
 	}
-	
+
 	/**
 	 * Get the total distance you need to walk to hatch the current egg.
-	 * 
+	 *
 	 * @return total distance to walk to hatch the egg (km)
 	 */
 	public double getKmTarget() {
 		return proto.getTargetKmWalked();
 	}
-	
+
 	/**
 	 * Get the distance walked before the current egg was incubated.
-	 * 
+	 *
 	 * @return distance to walked before incubating egg
 	 * @deprecated Wrong method name, use {@link #getKmStart()}
 	 */
 	public double getKmWalked() {
 		return getKmStart();
 	}
-	
+
 	/**
 	 * Get the distance walked before the current egg was incubated.
-	 * 
+	 *
 	 * @return distance walked before incubating egg (km)
 	 */
 	public double getKmStart() {
 		return proto.getStartKmWalked();
 	}
-	
+
 	/**
 	 * Gets the total distance to walk with the current egg before hatching.
-	 * 
+	 *
 	 * @return total km between incubation and hatching
 	 */
 	public double getHatchDistance() {
 		return getKmTarget() - getKmStart();
 	}
-	
+
 	/**
 	 * Get the distance walked with the current incubated egg.
-	 * 
+	 *
 	 * @return distance walked with the current incubated egg (km)
-	 * @throws LoginFailedException if there is an error with the token during retrieval of player stats
-	 * @throws RemoteServerException if the server responds badly during retrieval of player stats
 	 */
-	public double getKmCurrentlyWalked() throws LoginFailedException, RemoteServerException {
-		return pgo.getPlayerProfile().getStats().getKmWalked() - getKmStart();
+	public double getKmCurrentlyWalked() {
+		return api.getPlayerProfile().getStats().getKmWalked() - getKmStart();
 	}
-	
+
 	/**
 	 * Get the distance left to walk before this incubated egg will hatch.
-	 * 
+	 *
 	 * @return distance to walk before hatch (km)
-	 * @throws LoginFailedException if there is an error with the token during retrieval of player stats
-	 * @throws RemoteServerException if the server responds badly during retrieval of player stats
 	 */
-	public double getKmLeftToWalk() throws LoginFailedException, RemoteServerException {
-		return getKmTarget() - pgo.getPlayerProfile().getStats().getKmWalked();
+	public double getKmLeftToWalk() {
+		return getKmTarget() - api.getPlayerProfile().getStats().getKmWalked();
 	}
-	
+
 	/**
 	 * Is the incubator currently being used
-	 * 
+	 *
 	 * @return currently used or not
 	 */
-	public boolean isInUse() throws LoginFailedException, RemoteServerException {
-		return getKmTarget() > pgo.getPlayerProfile().getStats().getKmWalked();
+	public boolean isInUse() {
+		return getKmTarget() > api.getPlayerProfile().getStats().getKmWalked();
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return obj instanceof EggIncubator && ((EggIncubator) obj).getId().equals(getId());
 	}
 }

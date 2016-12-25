@@ -38,8 +38,11 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.pokegoapi.api.PokemonGo;
 import com.pokegoapi.api.inventory.Item;
 import com.pokegoapi.api.map.pokemon.EvolutionResult;
+import com.pokegoapi.api.player.PlayerProfile;
 import com.pokegoapi.exceptions.AsyncRemoteServerException;
+import com.pokegoapi.exceptions.CaptchaActiveException;
 import com.pokegoapi.exceptions.LoginFailedException;
+import com.pokegoapi.exceptions.NoSuchItemException;
 import com.pokegoapi.exceptions.RemoteServerException;
 import com.pokegoapi.main.AsyncServerRequest;
 import com.pokegoapi.main.ServerRequest;
@@ -55,11 +58,9 @@ import rx.functions.Func1;
 public class Pokemon extends PokemonDetails {
 
 	private static final String TAG = Pokemon.class.getSimpleName();
-	private final PokemonGo api;
 	@Getter
 	@Setter
 	private int stamina;
-
 
 	/**
 	 * Creates a Pokemon object with helper functions around the proto.
@@ -69,7 +70,6 @@ public class Pokemon extends PokemonDetails {
 	 */
 	public Pokemon(PokemonGo api, PokemonData proto) {
 		super(api, proto);
-		this.api = api;
 		this.stamina = proto.getStamina();
 	}
 
@@ -79,8 +79,9 @@ public class Pokemon extends PokemonDetails {
 	 * @return the result
 	 * @throws LoginFailedException  the login failed exception
 	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public Result transferPokemon() throws LoginFailedException, RemoteServerException {
+	public Result transferPokemon() throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		ReleasePokemonMessage reqMsg = ReleasePokemonMessage.newBuilder().setPokemonId(getId()).build();
 
 		ServerRequest serverRequest = new ServerRequest(RequestType.RELEASE_POKEMON, reqMsg);
@@ -111,9 +112,10 @@ public class Pokemon extends PokemonDetails {
 	 * @return the nickname pokemon response . result
 	 * @throws LoginFailedException  the login failed exception
 	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	public NicknamePokemonResponse.Result renamePokemon(String nickname)
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		NicknamePokemonMessage reqMsg = NicknamePokemonMessage.newBuilder()
 				.setPokemonId(getId())
 				.setNickname(nickname)
@@ -142,9 +144,10 @@ public class Pokemon extends PokemonDetails {
 	 * @return the SetFavoritePokemonResponse.Result
 	 * @throws LoginFailedException  the login failed exception
 	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	public SetFavoritePokemonResponse.Result setFavoritePokemon(boolean markFavorite)
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		SetFavoritePokemonMessage reqMsg = SetFavoritePokemonMessage.newBuilder()
 				.setPokemonId(getId())
 				.setIsFavorite(markFavorite)
@@ -170,11 +173,34 @@ public class Pokemon extends PokemonDetails {
 	 * Check if can powers up this pokemon
 	 *
 	 * @return the boolean
-	 * @throws LoginFailedException  the login failed exception
-	 * @throws RemoteServerException the remote server exception
 	 */
-	public boolean canPowerUp() throws LoginFailedException, RemoteServerException {
-		return getCandy() >= getCandyCostsForPowerup();
+	public boolean canPowerUp() {
+		return getCandy() >= getCandyCostsForPowerup() && api.getPlayerProfile()
+				.getCurrency(PlayerProfile.Currency.STARDUST) >= getStardustCostsForPowerup();
+	}
+
+	/**
+	 * Check if can powers up this pokemon, you can choose whether or not to consider the max cp limit for current
+	 * player level passing true to consider and false to not consider.
+	 *
+	 * @param considerMaxCPLimitForPlayerLevel Consider max cp limit for actual player level
+	 * @return the boolean
+	 * @throws NoSuchItemException   If the PokemonId value cannot be found in the {@link PokemonMetaRegistry}.
+	 */
+	public boolean canPowerUp(boolean considerMaxCPLimitForPlayerLevel)
+			throws NoSuchItemException {
+		return considerMaxCPLimitForPlayerLevel
+				? this.canPowerUp() && (this.getCp() < this.getMaxCpForPlayer())
+				: canPowerUp();
+	}
+
+	/**
+	 * Check if can evolve this pokemon
+	 *
+	 * @return the boolean
+	 */
+	public boolean canEvolve() {
+		return Evolutions.canEvolve(getPokemonId()) && (getCandy() >= getCandiesToEvolve());
 	}
 
 	/**
@@ -184,8 +210,10 @@ public class Pokemon extends PokemonDetails {
 	 * @return The result
 	 * @throws LoginFailedException  the login failed exception
 	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public UpgradePokemonResponse.Result powerUp() throws LoginFailedException, RemoteServerException {
+	public UpgradePokemonResponse.Result powerUp()
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return AsyncHelper.toBlocking(powerUpAsync());
 	}
 
@@ -210,7 +238,7 @@ public class Pokemon extends PokemonDetails {
 							throw new AsyncRemoteServerException(e);
 						}
 						//set new pokemon details
-						setProto(response.getUpgradedPokemon());
+						applyProto(response.getUpgradedPokemon());
 						return response.getResult();
 					}
 				});
@@ -223,8 +251,9 @@ public class Pokemon extends PokemonDetails {
 	 * @return the evolution result
 	 * @throws LoginFailedException  the login failed exception
 	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public EvolutionResult evolve() throws LoginFailedException, RemoteServerException {
+	public EvolutionResult evolve() throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		EvolvePokemonMessage reqMsg = EvolvePokemonMessage.newBuilder().setPokemonId(getId()).build();
 
 		ServerRequest serverRequest = new ServerRequest(RequestType.EVOLVE_POKEMON, reqMsg);
@@ -245,32 +274,6 @@ public class Pokemon extends PokemonDetails {
 
 		return result;
 	}
-
-	/**
-	 * @return The CP for this pokemon after powerup
-	 */
-	public int getCpAfterPowerup() {
-		return PokemonCpUtils.getCpAfterPowerup(getProto().getCp(),
-				getProto().getCpMultiplier() + getProto().getAdditionalCpMultiplier());
-	}
-
-	/**
-	 * @return Cost of candy for a powerup
-	 */
-	public int getCandyCostsForPowerup() {
-		return PokemonCpUtils.getCandyCostsForPowerup(getProto().getCpMultiplier() + getProto().getAdditionalCpMultiplier(),
-				getProto().getNumUpgrades());
-	}
-
-	/**
-	 * @return Cost of stardust for a powerup
-	 */
-	public int getStardustCostsForPowerup() {
-		return PokemonCpUtils.getStartdustCostsForPowerup(
-				getProto().getCpMultiplier() + getProto().getAdditionalCpMultiplier(),
-				getProto().getNumUpgrades());
-	}
-
 
 	/**
 	 * Check if pokemon its injured but not fainted. need potions to heal
@@ -296,9 +299,10 @@ public class Pokemon extends PokemonDetails {
 	 * @return Result, ERROR_CANNOT_USE if the requirements arent met
 	 * @throws LoginFailedException  If login failed.
 	 * @throws RemoteServerException If server communication issues occurred.
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	public UseItemPotionResponse.Result heal()
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 
 		if (!isInjured())
 			return UseItemPotionResponse.Result.ERROR_CANNOT_USE;
@@ -326,9 +330,10 @@ public class Pokemon extends PokemonDetails {
 	 * @return Result, ERROR_CANNOT_USE if the requirements aren't met
 	 * @throws LoginFailedException  If login failed.
 	 * @throws RemoteServerException If server communications failed.
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	public UseItemPotionResponse.Result usePotion(ItemId itemId)
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 
 		Item potion = api.getInventories().getItemBag().getItem(itemId);
 		//some sanity check, to prevent wrong use of this call
@@ -359,12 +364,13 @@ public class Pokemon extends PokemonDetails {
 	/**
 	 * Revive a pokemon, using various fallbacks for revive items
 	 *
-	 * @return Result, ERROR_CANNOT_USE if the requirements arent met
+	 * @return Result, ERROR_CANNOT_USE if the requirements aren't met
 	 * @throws LoginFailedException  If login failed.
 	 * @throws RemoteServerException If server communications failed.
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	public UseItemReviveResponse.Result revive()
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 
 		if (!isFainted())
 			return UseItemReviveResponse.Result.ERROR_CANNOT_USE;
@@ -383,12 +389,13 @@ public class Pokemon extends PokemonDetails {
 	 * to be revived.
 	 *
 	 * @param itemId {@link ItemId} of the Revive to use.
-	 * @return Result, ERROR_CANNOT_USE if the requirements arent met
+	 * @return Result, ERROR_CANNOT_USE if the requirements aren't met
 	 * @throws LoginFailedException  If login failed.
 	 * @throws RemoteServerException If server communications failed.
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	public UseItemReviveResponse.Result useRevive(ItemId itemId)
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 
 		Item item = api.getInventories().getItemBag().getItem(itemId);
 		if (!item.isRevive() || item.getCount() < 1 || !isFainted())
@@ -415,7 +422,44 @@ public class Pokemon extends PokemonDetails {
 		}
 	}
 
-	public EvolutionForm getEvolutionForm() {
-		return new EvolutionForm(getPokemonId());
+	public Evolution getEvolution() {
+		return Evolutions.getEvolution(this.getPokemonId());
+	}
+
+	/**
+	 * @return Actual stamina in percentage relative to the current maximum stamina (useful in ProgressBars)
+	 */
+	public int getStaminaInPercentage() {
+		return (getStamina() * 100) / getMaxStamina();
+	}
+
+	/**
+	 * Actual cp in percentage relative to the maximum cp that this pokemon can reach
+	 * at the actual player level (useful in ProgressBars)
+	 *
+	 * @return Actual cp in percentage
+	 * @throws NoSuchItemException   if threw from {@link #getMaxCpForPlayer()}
+	 */
+	public int getCPInPercentageActualPlayerLevel()
+			throws NoSuchItemException {
+		return ((getCp() * 100) / getMaxCpForPlayer());
+	}
+
+	/**
+	 * Actual cp in percentage relative to the maximum cp that this pokemon can reach at player-level 40
+	 * (useful in ProgressBars)
+	 *
+	 * @return Actual cp in percentage
+	 * @throws NoSuchItemException if threw from {@link #getMaxCp()}
+	 */
+	public int getCPInPercentageMaxPlayerLevel() throws NoSuchItemException {
+		return ((getCp() * 100) / getMaxCp());
+	}
+
+	/**
+	 * @return IV in percentage
+	 */
+	public double getIvInPercentage() {
+		return ((Math.floor((this.getIvRatio() * 100) * 100)) / 100);
 	}
 }

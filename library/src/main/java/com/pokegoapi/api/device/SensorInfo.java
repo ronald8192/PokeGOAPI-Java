@@ -16,6 +16,11 @@
 package com.pokegoapi.api.device;
 
 import POGOProtos.Networking.Envelopes.SignatureOuterClass;
+import com.pokegoapi.api.PokemonGo;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.util.Random;
 
 /**
  * Created by fabianterhorst on 08.08.16.
@@ -24,6 +29,10 @@ import POGOProtos.Networking.Envelopes.SignatureOuterClass;
 public class SensorInfo {
 
 	private SignatureOuterClass.Signature.SensorInfo.Builder sensorInfoBuilder;
+
+	@Setter
+	@Getter
+	private long timestampCreate;
 
 	public SensorInfo() {
 		sensorInfoBuilder = SignatureOuterClass.Signature.SensorInfo.newBuilder();
@@ -38,132 +47,200 @@ public class SensorInfo {
 		this();
 		sensorInfoBuilder
 				.setTimestampSnapshot(sensorInfos.getTimestampSnapshot())
-				.setAccelerometerAxes(sensorInfos.getAccelerometerAxes())
-				.setAccelNormalizedX(sensorInfos.getAccelNormalizedX())
-				.setAccelNormalizedY(sensorInfos.getAccelNormalizedY())
-				.setAccelNormalizedZ(sensorInfos.getAccelNormalizedZ())
-				.setAccelRawX(sensorInfos.getAccelRawX())
-				.setAccelRawY(sensorInfos.getAccelRawY())
-				.setAccelRawZ(sensorInfos.getAccelRawZ())
-				.setAngleNormalizedX(sensorInfos.getAngleNormalizedX())
-				.setAngleNormalizedY(sensorInfos.getAngleNormalizedY())
-				.setAngleNormalizedZ(sensorInfos.getAngleNormalizedZ())
-				.setGyroscopeRawX(sensorInfos.getGyroscopeRawX())
-				.setGyroscopeRawY(sensorInfos.getGyroscopeRawY())
-				.setGyroscopeRawZ(sensorInfos.getGyroscopeRawZ())
+				.setStatus((int) sensorInfos.getAccelerometerAxes())
+				.setGravityX(sensorInfos.getAccelNormalizedX())
+				.setGravityY(sensorInfos.getAccelNormalizedY())
+				.setGravityZ(sensorInfos.getAccelNormalizedZ())
+				.setAttitudePitch(sensorInfos.getAccelRawX())
+				.setAttitudeYaw(sensorInfos.getAccelRawY())
+				.setAttitudeRoll(sensorInfos.getAccelRawZ())
+				.setRotationRateX(sensorInfos.getAngleNormalizedX())
+				.setRotationRateY(sensorInfos.getAngleNormalizedY())
+				.setRotationRateZ(sensorInfos.getAngleNormalizedZ())
+				.setAttitudePitch(sensorInfos.getGyroscopeRawX())
+				.setAttitudeYaw(sensorInfos.getGyroscopeRawY())
+				.setAttitudeRoll(sensorInfos.getGyroscopeRawZ())
 				.build();
 	}
 
 	/**
-	 * Sets timestamp snapshot in ms since start
+	 * Gets the default sensor info for the given api
 	 *
+	 * @param api the api
+	 * @param currentTime the current time
+	 * @param random random object
+	 * @return the default sensor info for the given api
+	 */
+	public static SignatureOuterClass.Signature.SensorInfo getDefault(PokemonGo api, long currentTime, Random random) {
+		SensorInfo sensorInfo;
+		if (api.getSensorInfo() == null) {
+			sensorInfo = new SensorInfo();
+			sensorInfo.getBuilder().setTimestampSnapshot(currentTime - api.getStartTime() + random.nextInt(500))
+					.setRotationRateX(0.1 + (0.7 - 0.1) * random.nextDouble())
+					.setRotationRateY(0.1 + (0.8 - 0.1) * random.nextDouble())
+					.setRotationRateZ(0.1 + (0.8 - 0.1) * random.nextDouble())
+					.setAttitudePitch(-1.0 + random.nextDouble() * 2.0)
+					.setAttitudeRoll(-1.0 + random.nextDouble() * 2.0)
+					.setAttitudeYaw(-1.0 + random.nextDouble() * 2.0)
+					.setGravityX(-1.0 + random.nextDouble() * 2.0)
+					.setGravityY(-1.0 + random.nextDouble() * 2.0)
+					.setGravityZ(-1.0 + random.nextDouble() * 2.0)
+					.setMagneticFieldAccuracy(-1)
+					.setStatus(3);
+			api.setSensorInfo(sensorInfo);
+		} else {
+			sensorInfo = api.getSensorInfo();
+			sensorInfo.getBuilder().setTimestampSnapshot(currentTime - api.getStartTime() + random.nextInt(500))
+					.setLinearAccelerationX(-0.7 + random.nextDouble() * 1.4)
+					.setLinearAccelerationY(-0.7 + random.nextDouble() * 1.4)
+					.setLinearAccelerationZ(-0.7 + random.nextDouble() * 1.4)
+					.setRotationRateX(0.1 + (0.7 - 0.1) * random.nextDouble())
+					.setRotationRateY(0.1 + (0.8 - 0.1) * random.nextDouble())
+					.setRotationRateZ(0.1 + (0.8 - 0.1) * random.nextDouble())
+					.setAttitudePitch(-1.0 + random.nextDouble() * 2.0)
+					.setAttitudeRoll(-1.0 + random.nextDouble() * 2.0)
+					.setAttitudeYaw(-1.0 + random.nextDouble() * 2.0)
+					.setGravityX(-1.0 + random.nextDouble() * 2.0)
+					.setGravityY(-1.0 + random.nextDouble() * 2.0)
+					.setGravityZ(-1.0 + random.nextDouble() * 2.0)
+					.setMagneticFieldAccuracy(-1)
+					.setStatus(3);
+		}
+		if (currentTime - sensorInfo.getTimestampCreate() > (random.nextInt(10 * 1000) + 5 * 1000)) {
+			sensorInfo.setTimestampCreate(currentTime);
+			return sensorInfo.getSensorInfo();
+		}
+		return null;
+	}
+
+	/**
+	 * Sets timestamp snapshot since start
+	 *
+	 * @param timestampSnapshot timestamp in ms since app start
 	 */
 	public void setTimestampSnapshot(long timestampSnapshot) {
 		sensorInfoBuilder.setTimestampSnapshot(timestampSnapshot);
 	}
 
 	/**
-	 * Sets accelerometer axes, always 3
+	 * Sets sensor status
 	 *
+	 * @param status sensor info status (always 3)
 	 */
-	public void setAccelerometerAxes(long accelerometerAxes) {
-		sensorInfoBuilder.setAccelerometerAxes(accelerometerAxes);
+	public void setStatus(int status) {
+		sensorInfoBuilder.setStatus(status);
 	}
 
 	/**
-	 * Sets accel normalized x
-	 * 
+	 * Sets linear acceleration x
+	 *
+	 * @param linearAccelerationX linear acceleration x
 	 */
-	public void setAccelNormalizedX(double accelNormalizedX) {
-		sensorInfoBuilder.setAccelNormalizedX(accelNormalizedX);
+	public void setLinearAccelerationX(double linearAccelerationX) {
+		sensorInfoBuilder.setLinearAccelerationX(linearAccelerationX);
 	}
 
 	/**
-	 * Sets accel normalized y
+	 * Sets linear acceleration y
 	 *
+	 * @param linearAccelerationY linear acceleration y
 	 */
-	public void setAccelNormalizedY(double accelNormalizedY) {
-		sensorInfoBuilder.setAngleNormalizedY(accelNormalizedY);
+	public void setLinearAccelerationY(double linearAccelerationY) {
+		sensorInfoBuilder.setLinearAccelerationY(linearAccelerationY);
 	}
 
 	/**
-	 * Sets accel normalized z
+	 * Sets linear acceleration z
 	 *
+	 * @param linearAccelerationZ linear acceleration z
 	 */
-	public void setAccelNormalizedZ(double accelNormalizedZ) {
-		sensorInfoBuilder.setAccelNormalizedZ(accelNormalizedZ);
+	public void setLinearAccelerationZ(double linearAccelerationZ) {
+		sensorInfoBuilder.setLinearAccelerationZ(linearAccelerationZ);
 	}
 
 	/**
-	 * Sets accel raw x
+	 * Sets gravity x
 	 *
+	 * @param gravityX gravity x
 	 */
-	public void setAccelRawX(double accelRawX) {
-		sensorInfoBuilder.setAccelRawX(accelRawX);
+	public void setGravityX(double gravityX) {
+		sensorInfoBuilder.setGravityX(gravityX);
 	}
 
 	/**
-	 * Sets accel raw y
+	 * Sets gravity y
 	 *
+	 * @param gravityY gravity y
 	 */
-	public void setAccelRawY(double accelRawY) {
-		sensorInfoBuilder.setAccelRawY(accelRawY);
+	public void setGravityY(double gravityY) {
+		sensorInfoBuilder.setGravityY(gravityY);
 	}
 
 	/**
-	 * Sets accel raw z
+	 * Sets gravity z
 	 *
+	 * @param gravityZ gravity z
 	 */
-	public void setAccelRawZ(double accelRawZ) {
-		sensorInfoBuilder.setAccelRawZ(accelRawZ);
+	public void setGravityZ(double gravityZ) {
+		sensorInfoBuilder.setGravityZ(gravityZ);
 	}
 
 	/**
-	 * Sets angel normalized x
+	 * Sets rotation rate x
 	 *
+	 * @param rotationRateX rotation rate x
 	 */
-	public void setAngleNormalizedX(double angleNormalizedX) {
-		sensorInfoBuilder.setAngleNormalizedX(angleNormalizedX);
+	public void setRotationRateX(double rotationRateX) {
+		sensorInfoBuilder.setRotationRateX(rotationRateX);
 	}
 
 	/**
-	 * Sets angel normalized y
+	 * Sets rotation rate y
 	 *
+	 * @param rotationRateY rotation rate y
 	 */
-	public void setAngleNormalizedY(double angleNormalizedY) {
-		sensorInfoBuilder.setAngleNormalizedY(angleNormalizedY);
+	public void setRotationRateY(double rotationRateY) {
+		sensorInfoBuilder.setRotationRateY(rotationRateY);
 	}
 
 	/**
-	 * Sets angel normalized z
+	 * Setsrotation rate z
 	 *
+	 * @param rotationRateZ rotation rate z
 	 */
-	public void setAngleNormalizedZ(double angleNormalizedZ) {
-		sensorInfoBuilder.setAngleNormalizedZ(angleNormalizedZ);
+	public void setRotationRateZ(double rotationRateZ) {
+		sensorInfoBuilder.setRotationRateZ(rotationRateZ);
 	}
 
 	/**
-	 * Sets gyroscope raw x
+	 * Sets attitude pitch (x axis)
 	 *
+	 * @param attitudePitch attitude pitch (x axis)
 	 */
-	public void setGyroscopeRawX(double gyroscopeRawX) {
-		sensorInfoBuilder.setGyroscopeRawX(gyroscopeRawX);
+	public void setAttitudePitch(double attitudePitch) {
+		sensorInfoBuilder.setAttitudePitch(attitudePitch);
 	}
 
 	/**
-	 * Sets gyroscope raw y
+	 * Sets attitude yaw (y axis)
 	 *
+	 * @param attitudeYaw attitude yaw (y axis)
 	 */
-	public void setGyroscopeRawY(double gyroscopeRawY) {
-		sensorInfoBuilder.setGyroscopeRawY(gyroscopeRawY);
+	public void setAttitudeYaw(double attitudeYaw) {
+		sensorInfoBuilder.setAttitudeYaw(attitudeYaw);
 	}
 
 	/**
-	 * Sets gyroscope raw z
+	 * Sets attitude roll (z axis)
 	 *
+	 * @param attitudeRoll attitude roll (z axis)
 	 */
-	public void setGyroscopeRawZ(double gyroscopeRawZ) {
-		sensorInfoBuilder.setGyroscopeRawZ(gyroscopeRawZ);
+	public void setAttitudeRoll(double attitudeRoll) {
+		sensorInfoBuilder.setAttitudeRoll(attitudeRoll);
+	}
+
+	public SignatureOuterClass.Signature.SensorInfo.Builder getBuilder() {
+		return sensorInfoBuilder;
 	}
 
 	/**

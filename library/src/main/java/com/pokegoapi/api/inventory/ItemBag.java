@@ -27,59 +27,66 @@ import POGOProtos.Networking.Responses.UseIncenseResponseOuterClass.UseIncenseRe
 import POGOProtos.Networking.Responses.UseItemXpBoostResponseOuterClass.UseItemXpBoostResponse;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.pokegoapi.api.PokemonGo;
+import com.pokegoapi.exceptions.CaptchaActiveException;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
 import com.pokegoapi.main.ServerRequest;
 import com.pokegoapi.util.Log;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 
 /**
  * The type Bag.
  */
 public class ItemBag {
-	private PokemonGo pgo;
-	private HashMap<ItemId, Item> items;
+	private final PokemonGo api;
+	private final Map<ItemId, Item> items = Collections.synchronizedMap(new HashMap<ItemId, Item>());
+	private final Object lock = new Object();
 
-	public ItemBag(PokemonGo pgo) {
-		reset(pgo);
+	public ItemBag(PokemonGo api) {
+		this.api = api;
 	}
 
-	public void reset(PokemonGo pgo) {
-		this.pgo = pgo;
-		items = new HashMap<>();
+	public void reset() {
+		synchronized (this.lock) {
+			items.clear();
+		}
 	}
 
 	public void addItem(Item item) {
-		items.put(item.getItemId(), item);
+		synchronized (this.lock) {
+			items.put(item.getItemId(), item);
+		}
 	}
 
 	/**
-	 * Remove item result.
+	 * Discards the given item.
 	 *
-	 * @param id
-	 *            the id
-	 * @param quantity
-	 *            the quantity
+	 * @param id the id
+	 * @param quantity the quantity
 	 * @return the result
-	 * @throws RemoteServerException
-	 *             the remote server exception
-	 * @throws LoginFailedException
-	 *             the login failed exception
+	 * @throws RemoteServerException the remote server exception
+	 * @throws LoginFailedException the login failed exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public Result removeItem(ItemId id, int quantity) throws RemoteServerException, LoginFailedException {
+	public Result removeItem(ItemId id, int quantity)
+			throws RemoteServerException, CaptchaActiveException, LoginFailedException {
 		Item item = getItem(id);
 		if (item.getCount() < quantity) {
-			throw new IllegalArgumentException("You cannont remove more quantity than you have");
+			throw new IllegalArgumentException("You cannot remove more quantity than you have");
 		}
 
 		RecycleInventoryItemMessage msg = RecycleInventoryItemMessage.newBuilder().setItemId(id).setCount(quantity)
 				.build();
 
 		ServerRequest serverRequest = new ServerRequest(RequestType.RECYCLE_INVENTORY_ITEM, msg);
-		pgo.getRequestHandler().sendServerRequests(serverRequest);
+		api.getRequestHandler().sendServerRequests(serverRequest);
 
 		RecycleInventoryItemResponseOuterClass.RecycleInventoryItemResponse response;
 		try {
@@ -92,15 +99,29 @@ public class ItemBag {
 		if (response
 				.getResult() == RecycleInventoryItemResponseOuterClass.RecycleInventoryItemResponse.Result.SUCCESS) {
 			item.setCount(response.getNewCount());
+			if (item.getCount() <= 0) {
+				removeItem(item.getItemId());
+			}
 		}
 		return response.getResult();
 	}
 
 	/**
+	 * Removes the given item ID from the bag item map.
+	 *
+	 * @param id the item to remove
+	 * @return The item removed, if any
+	 */
+	public Item removeItem(ItemId id) {
+		synchronized (this.lock) {
+			return items.remove(id);
+		}
+	}
+
+	/**
 	 * Gets item.
 	 *
-	 * @param type
-	 *            the type
+	 * @param type the type
 	 * @return the item
 	 */
 	public Item getItem(ItemId type) {
@@ -108,44 +129,46 @@ public class ItemBag {
 			throw new IllegalArgumentException("You cannot get item for UNRECOGNIZED");
 		}
 
-		// prevent returning null
-		if (!items.containsKey(type)) {
-			return new Item(ItemData.newBuilder().setCount(0).setItemId(type).build());
-		}
+		synchronized (this.lock) {
+			// prevent returning null
+			if (!items.containsKey(type)) {
+				return new Item(ItemData.newBuilder().setCount(0).setItemId(type).build(), this);
+			}
 
-		return items.get(type);
+			return items.get(type);
+		}
 	}
 
 	public Collection<Item> getItems() {
-		return items.values();
+		synchronized (this.lock) {
+			return items.values();
+		}
 	}
 
 	/**
 	 * Get used space inside of player inventory.
 	 *
 	 * @return used space
-	 * @throws RemoteServerException
-	 *             the remote server exception
-	 * @throws LoginFailedException
-	 *             the login failed exception
 	 */
 	public int getItemsCount() {
-		int ct = 0;
-		for (Item item : items.values()) {
-			ct += item.getCount();
+		synchronized (this.lock) {
+			int ct = 0;
+			for (Item item : items.values()) {
+				ct += item.getCount();
+			}
+			return ct;
 		}
-		return ct;
 	}
 
 	/**
 	 * use an item with itemID
+	 *
 	 * @param type type of item
-	 * @throws RemoteServerException
-	 *             the remote server exception
-	 * @throws LoginFailedException
-	 *             the login failed exception
+	 * @throws RemoteServerException the remote server exception
+	 * @throws LoginFailedException the login failed exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public void useItem(ItemId type) throws RemoteServerException, LoginFailedException {
+	public void useItem(ItemId type) throws RemoteServerException, CaptchaActiveException, LoginFailedException {
 		if (type == ItemId.UNRECOGNIZED) {
 			throw new IllegalArgumentException("You cannot use item for UNRECOGNIZED");
 		}
@@ -164,22 +187,25 @@ public class ItemBag {
 
 	/**
 	 * use an incense
+	 *
 	 * @param type type of item
+	 * @throws RemoteServerException the remote server exception
+	 * @throws LoginFailedException the login failed exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public void useIncense(ItemId type) throws RemoteServerException, LoginFailedException {
-		UseIncenseMessage useIncenseMessage = 
+	public void useIncense(ItemId type) throws RemoteServerException, CaptchaActiveException, LoginFailedException {
+		UseIncenseMessage useIncenseMessage =
 				UseIncenseMessage.newBuilder()
-				.setIncenseType(type)
-				.setIncenseTypeValue(type.getNumber())
-				.build();
-		
+						.setIncenseType(type)
+						.setIncenseTypeValue(type.getNumber())
+						.build();
+
 		ServerRequest useIncenseRequest = new ServerRequest(RequestType.USE_INCENSE,
 				useIncenseMessage);
-		pgo.getRequestHandler().sendServerRequests(useIncenseRequest);
+		api.getRequestHandler().sendServerRequests(useIncenseRequest);
 
-		UseIncenseResponse response = null;
 		try {
-			response = UseIncenseResponse.parseFrom(useIncenseRequest.getData());
+			UseIncenseResponse response = UseIncenseResponse.parseFrom(useIncenseRequest.getData());
 			Log.i("Main", "Use incense result: " + response.getResult());
 		} catch (InvalidProtocolBufferException e) {
 			throw new RemoteServerException(e);
@@ -189,16 +215,25 @@ public class ItemBag {
 
 	/**
 	 * use an item with itemID
+	 *
+	 * @throws RemoteServerException the remote server exception
+	 * @throws LoginFailedException the login failed exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public void useIncense() throws RemoteServerException, LoginFailedException {	
+	public void useIncense() throws RemoteServerException, CaptchaActiveException, LoginFailedException {
 		useIncense(ItemId.ITEM_INCENSE_ORDINARY);
 	}
 
 	/**
 	 * use a lucky egg
-	 * @returns lucky egg response
+	 *
+	 * @return the xp boost response
+	 * @throws RemoteServerException the remote server exception
+	 * @throws LoginFailedException the login failed exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public UseItemXpBoostResponse useLuckyEgg() throws RemoteServerException, LoginFailedException {
+	public UseItemXpBoostResponse useLuckyEgg()
+			throws RemoteServerException, CaptchaActiveException, LoginFailedException {
 		UseItemXpBoostMessage xpMsg = UseItemXpBoostMessage
 				.newBuilder()
 				.setItemId(ItemId.ITEM_LUCKY_EGG)
@@ -206,17 +241,27 @@ public class ItemBag {
 
 		ServerRequest req = new ServerRequest(RequestType.USE_ITEM_XP_BOOST,
 				xpMsg);
-		pgo.getRequestHandler().sendServerRequests(req);
+		api.getRequestHandler().sendServerRequests(req);
 
-		UseItemXpBoostResponse response = null;
 		try {
-			response = UseItemXpBoostResponse.parseFrom(req.getData());
+			UseItemXpBoostResponse response = UseItemXpBoostResponse.parseFrom(req.getData());
 			Log.i("Main", "Use incense result: " + response.getResult());
+			return response;
 		} catch (InvalidProtocolBufferException e) {
 			throw new RemoteServerException(e);
 		}
-
-		return response;
 	}
 
+	/**
+	 * @return a list of useable pokeballs that are in the inventory
+	 */
+	public List<Pokeball> getUseablePokeballs() {
+		List<Pokeball> pokeballs = new ArrayList<>();
+		for (Pokeball pokeball : Pokeball.values()) {
+			if (getItem(pokeball.getBallType()).getCount() > 0) {
+				pokeballs.add(pokeball);
+			}
+		}
+		return pokeballs;
+	}
 }

@@ -13,12 +13,14 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package com.pokegoapi.examples;
+package com.pokegoapi.util;
 
 /**
- * Created by court on 19/07/2016.
+ * Created by iGio90 on 27/08/16.
  */
-public class ExampleLoginDetails {
-	public static String LOGIN = "";
-	public static String PASSWORD = "";
+
+public class Constant {
+	public static final int APP_VERSION = 4500;
+
+	public static final long UNK25 = -1553869577012279119L;
 }

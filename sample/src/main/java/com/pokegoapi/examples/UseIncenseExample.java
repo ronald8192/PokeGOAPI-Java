@@ -33,6 +33,7 @@ package com.pokegoapi.examples;
 
 import com.pokegoapi.api.PokemonGo;
 import com.pokegoapi.auth.GoogleAutoCredentialProvider;
+import com.pokegoapi.exceptions.CaptchaActiveException;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
 import com.pokegoapi.util.Log;
@@ -46,18 +47,22 @@ public class UseIncenseExample {
 	 */
 	public static void main(String[] args) {
 		OkHttpClient http = new OkHttpClient();
+
+		PokemonGo go = new PokemonGo(http, new SystemTimeImpl());
+
 		try {
 			GoogleAutoCredentialProvider authProvider =
-					new GoogleAutoCredentialProvider(http, ExampleLoginDetails.LOGIN, ExampleLoginDetails.PASSWORD);
-			//new PtcLogin(http).login(ExampleLoginDetails.LOGIN, ExampleLoginDetails.PASSWORD);
-			PokemonGo go = new PokemonGo(authProvider, http, new SystemTimeImpl());
-			
-			go.setLocation(45.817521, 16.028199, 0);
+					new GoogleAutoCredentialProvider(http, ExampleConstants.LOGIN, ExampleConstants.PASSWORD);
+			//new PtcLogin(http).login(ExampleConstants.LOGIN, ExampleConstants.PASSWORD);
+
+			go.login(authProvider);
+
+			go.setLocation(ExampleConstants.LATITUDE, ExampleConstants.LONGITUDE, ExampleConstants.ALTITUDE);
 			go.getInventories().getItemBag().useIncense();
 
-		} catch (LoginFailedException | RemoteServerException e) {
+		} catch (LoginFailedException | RemoteServerException | CaptchaActiveException e) {
 			// failed to login, invalid credentials, auth issue or server issue.
-			Log.e("Main", "Failed to login or server issue: ", e);
+			Log.e("Main", "Failed to login, captcha or server issue: ", e);
 
 		}
 	}

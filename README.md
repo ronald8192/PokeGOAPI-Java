@@ -18,9 +18,9 @@ ___
 
 This API may have issues when the PokemonGO servers are under high load or down, in this case please wait for the official to get back up. You can check the official servers status on [IsPokemonGoDownOrNot.com](http://ispokemongodownornot.com) or [MMOServerStatus.com](http://www.mmoserverstatus.com/pokemon_go).
 
-This API doesnt fake the official client perfectly, niantic may know that you arent using the official app, we encourage you to use a alternate account to play with this API.
+This API doesnt fake the official client perfectly, niantic may know that you aren't using the official app, we encourage you to use an alternate account to play with this API.
 
-If you are using this lib to catch pokemon and loot pokestop, take care that you arent teleporting, the servers may issue a softban against your client (its temporary, between 10 and 30 minutes in general).
+If you are using this lib to catch pokemon and loot pokestop, take care that you aren't teleporting, the servers may issue a softban against your client (its temporary, between 10 and 30 minutes in general).
 
 :exclamation: :exclamation: :exclamation:
 ___
@@ -47,9 +47,9 @@ Import JAR with gradle
   - Complete `Build from source` below
   - Open the project gradle.build file
   - Locate ``dependencies {`` 
-  - Add ``compile files('PATH_TO/PokeGOAPI-Java/library/build/libs/PokeGOAPI-library-all-0.X.X.jar')``
+  - Add ``compile fileTree(include: ['PokeGOAPI-library-all-*.jar'], dir: 'PATH_TO/PokeGOAPI-Java/library/build/libs')``
     - (PATH_TO is the exact path from root to the API folder, i.e. C:/MyGitProjects)
-    - (0.X.X refers to the version number provided in the JAR filename, ie. 0.3.0)
+    - (Make sure to perform a clean build to avoid multiple versions being included)
 
 OR
 
@@ -91,15 +91,16 @@ GoogleUserCredentialProvider provider = new GoogleUserCredentialProvider(http);
 
 // in this url, you will get a code for the google account that is logged
 System.out.println("Please go to " + GoogleUserCredentialProvider.LOGIN_URL);
-System.out.println("Enter authorisation code:");
+System.out.println("Enter authorization code:");
 			
-// Ask the user to enter it in the standart input
+// Ask the user to enter it in the standard input
 Scanner sc = new Scanner(System.in);
 String access = sc.nextLine();
 			
 // we should be able to login with this token
 provider.login(access);
-PokemonGo go = new PokemonGo(provider, httpClient);
+PokemonGo go = new PokemonGo(httpClient);
+go.login(provider);
 
 /**
 * After this, if you do not want to re-authorize the google account every time, 
@@ -107,7 +108,8 @@ PokemonGo go = new PokemonGo(provider, httpClient);
 * ! The API does not store the refresh token for you !
 * log in using the refresh token like this :
 */
-PokemonGo go = new PokemonGo(new GoogleUserCredentialProvider(httpClient, refreshToken), httpClient);
+PokemonGo go = new PokemonGo(httpClient);
+go.login(new GoogleUserCredentialProvider(httpClient, refreshToken));
 
 /**
 * PTC is much simpler, but less secure.
@@ -115,7 +117,8 @@ PokemonGo go = new PokemonGo(new GoogleUserCredentialProvider(httpClient, refres
 * This account does not currently support a refresh_token. 
 * Example log in :
 */
-PokemonGo go = new PokemonGo(new PtcCredentialProvider(httpClient,username,password),httpClient);
+PokemonGo go = new PokemonGo(httpClient);
+go.login(new PtcCredentialProvider(httpClient, username, password));
 
 // After this you can access the api from the PokemonGo instance :
 go.getPlayerProfile(); // to get the user profile
@@ -141,6 +144,44 @@ try {
 	throw new RemoteServerException(e);
 }
 ```
+
+## (Async)CatchOptions
+
+Parameters for a capture now use a CatchOptions or AsyncCatchOptions object
+
+This object allows setting all parameters at once, or modifying them on-the-fly
+
+```
+import com.pokegoapi.api.settings.AsyncCatchOptions;
+```
+OR
+```
+import com.pokegoapi.api.settings.CatchOptions;
+```
+
+Usage:
+
+```
+CatchOptions options = new CatchOptions(go);
+options.maxRazzberries(5);
+options.useBestBall(true);
+options.noMasterBall(true);
+
+cp.catchPokemon(options);
+```
+
+OR
+
+```
+AsyncCatchOptions options = new AsyncCatchOptions(go);
+options.useRazzberries(true);
+options.useBestBall(true);
+options.noMasterBall(true);
+
+cp.catchPokemon(options);
+```
+
+Each option has a default and the most relevant option will override others with similar functionality (for example, usePokeBall will set the minimum of useBestBall, a maximum by using it alone, or the specific value with noFallback). See the javadocs for more info.
 
 ##Android Dev FAQ
 
@@ -171,5 +212,7 @@ You can't. The Google Identity Platform uses the SHA1 fingerprint and package na
   - @mjmfighter
   - @vmarchaud
   - @langerhans
+  - @fabianterhorst
+  - @LoungeKatt
 
 You can join us in the slack channel #javaapi on the pkre.slack.com ([you can get invited here](https://shielded-earth-81203.herokuapp.com/))

@@ -47,6 +47,7 @@ import com.pokegoapi.api.map.fort.Pokestop;
 import com.pokegoapi.api.map.pokemon.CatchablePokemon;
 import com.pokegoapi.api.map.pokemon.NearbyPokemon;
 import com.pokegoapi.exceptions.AsyncRemoteServerException;
+import com.pokegoapi.exceptions.CaptchaActiveException;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
 import com.pokegoapi.google.common.geometry.MutableInteger;
@@ -69,7 +70,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class Map {
 	private final PokemonGo api;
 	private MapObjects cachedMapObjects;
-	private List<CatchablePokemon> cachedCatchable;
+	private final List<CatchablePokemon> cachedCatchable = Collections.synchronizedList(
+			new CopyOnWriteArrayList<CatchablePokemon>()
+	);
 	private int cellWidth = 3;
 	private long lastMapUpdate;
 
@@ -77,10 +80,8 @@ public class Map {
 	 * Instantiates a new Map.
 	 *
 	 * @param api the api
-	 * @throws LoginFailedException  if the login failed
-	 * @throws RemoteServerException When a buffer exception is thrown
 	 */
-	public Map(PokemonGo api) throws LoginFailedException, RemoteServerException {
+	public Map(PokemonGo api) {
 		this.api = api;
 		cachedMapObjects = new MapObjects(api);
 		lastMapUpdate = 0;
@@ -93,13 +94,7 @@ public class Map {
 	 */
 	public Observable<List<CatchablePokemon>> getCatchablePokemonAsync() {
 
-		if (!useCache()) {
-			// getMapObjects wont be called unless this is null
-			// so need to force it if due for a refresh
-			cachedCatchable = null;
-		}
-
-		if (cachedCatchable != null) {
+		if (useCache() && cachedCatchable.size() > 0) {
 			return Observable.just(cachedCatchable);
 		}
 
@@ -122,8 +117,8 @@ public class Map {
 						catchablePokemons.add(new CatchablePokemon(api, pokestop.getFortData()));
 					}
 				}
-
-				cachedCatchable = Collections.synchronizedList(new CopyOnWriteArrayList<>(catchablePokemons));
+				cachedCatchable.clear();
+				cachedCatchable.addAll(catchablePokemons);
 				return cachedCatchable;
 			}
 		});
@@ -132,9 +127,10 @@ public class Map {
 	/**
 	 * Remove a catchable pokemon from the cache
 	 *
+	 * @param pokemon the catchable pokemon
 	 */
 	public void removeCatchable(CatchablePokemon pokemon) {
-		if (cachedCatchable != null) {
+		if (cachedCatchable.size() > 0) {
 			cachedCatchable.remove(pokemon);
 		}
 	}
@@ -143,8 +139,12 @@ public class Map {
 	 * Returns a list of catchable pokemon around the current location.
 	 *
 	 * @return a List of CatchablePokemon at your current location
+	 * @throws LoginFailedException  the login failed exception
+	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public List<CatchablePokemon> getCatchablePokemon() throws LoginFailedException, RemoteServerException {
+	public List<CatchablePokemon> getCatchablePokemon()
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return AsyncHelper.toBlocking(getCatchablePokemonAsync());
 	}
 
@@ -154,9 +154,10 @@ public class Map {
 	 * @return the catchable pokemon sort
 	 * @throws LoginFailedException  the login failed exception
 	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	public java.util.Map<Double, CatchablePokemon> getCatchablePokemonSort()
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		MapUtil<CatchablePokemon> util = new MapUtil<>();
 		return util.sortItems(getCatchablePokemon(), api);
 	}
@@ -165,8 +166,6 @@ public class Map {
 	 * Returns a list of nearby pokemon (non-catchable).
 	 *
 	 * @return a List of NearbyPokemon at your current location
-	 * @throws LoginFailedException  if the login failed
-	 * @throws RemoteServerException When a buffer exception is thrown
 	 */
 	public Observable<List<NearbyPokemon>> getNearbyPokemonAsync() {
 		return getMapObjectsAsync(getDefaultCells()).map(new Func1<MapObjects, List<NearbyPokemon>>() {
@@ -188,8 +187,10 @@ public class Map {
 	 * @return a List of NearbyPokemon at your current location
 	 * @throws LoginFailedException  if the login failed
 	 * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public List<NearbyPokemon> getNearbyPokemon() throws LoginFailedException, RemoteServerException {
+	public List<NearbyPokemon> getNearbyPokemon()
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return AsyncHelper.toBlocking(getNearbyPokemonAsync());
 	}
 
@@ -219,8 +220,9 @@ public class Map {
 	 * @return list of spawn points
 	 * @throws LoginFailedException  if the login failed
 	 * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public List<Point> getSpawnPoints() throws LoginFailedException, RemoteServerException {
+	public List<Point> getSpawnPoints() throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return AsyncHelper.toBlocking(getSpawnPointsAsync());
 	}
 
@@ -248,8 +250,11 @@ public class Map {
 	 * Get a list of gyms near the current location.
 	 *
 	 * @return List of gyms
+	 * @throws LoginFailedException  the login failed exception
+	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public List<Gym> getGyms() throws LoginFailedException, RemoteServerException {
+	public List<Gym> getGyms() throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return AsyncHelper.toBlocking(getGymsAsync());
 	}
 
@@ -259,8 +264,10 @@ public class Map {
 	 * @return the gym sort
 	 * @throws LoginFailedException  the login failed exception
 	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public java.util.Map<Double, Gym> getGymSort() throws LoginFailedException, RemoteServerException {
+	public java.util.Map<Double, Gym> getGymSort()
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		MapUtil<Gym> util = new MapUtil<>();
 		return util.sortItems(getGyms(), api);
 	}
@@ -289,8 +296,10 @@ public class Map {
 	 * @return list of spawn points
 	 * @throws LoginFailedException  if the login failed
 	 * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public List<Point> getDecimatedSpawnPoints() throws LoginFailedException, RemoteServerException {
+	public List<Point> getDecimatedSpawnPoints()
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return AsyncHelper.toBlocking(getDecimatedSpawnPointsAsync());
 	}
 
@@ -301,8 +310,10 @@ public class Map {
 	 * @return the decimated spawn points sort
 	 * @throws LoginFailedException  the login failed exception
 	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public java.util.Map<Double, Point> getDecimatedSpawnPointsSort() throws LoginFailedException, RemoteServerException {
+	public java.util.Map<Double, Point> getDecimatedSpawnPointsSort()
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		MapUtil<Point> util = new MapUtil<>();
 		return util.sortItems(getDecimatedSpawnPoints(), api);
 	}
@@ -334,7 +345,11 @@ public class Map {
 	 */
 	public Observable<MapObjects> getMapObjectsAsync(List<Long> cellIds) {
 
-		if (useCache()) {
+		if ((useCache() && (cachedMapObjects.getNearbyPokemons().size() > 0
+							|| cachedMapObjects.getCatchablePokemons().size() > 0
+							|| cachedMapObjects.getWildPokemons().size() > 0
+							|| cachedMapObjects.getDecimatedSpawnPoints().size() > 0
+							|| cachedMapObjects.getSpawnPoints().size() > 0)) || api.hasChallenge()) {
 			return Observable.just(cachedMapObjects);
 		}
 
@@ -351,7 +366,7 @@ public class Map {
 		}
 
 		final AsyncServerRequest asyncServerRequest = new AsyncServerRequest(
-				RequestType.GET_MAP_OBJECTS, builder.build());
+				RequestType.GET_MAP_OBJECTS, builder.build(), true);
 		return api.getRequestHandler()
 				.sendAsyncServerRequests(asyncServerRequest).map(new Func1<ByteString, MapObjects>() {
 					@Override
@@ -383,7 +398,7 @@ public class Map {
 							result.addPokestops(groupedForts.get(FortType.CHECKPOINT));
 						}
 
-						cachedCatchable = null;
+						cachedCatchable.clear();
 						return result;
 					}
 				});
@@ -395,8 +410,9 @@ public class Map {
 	 * @return MapObjects at your current location
 	 * @throws LoginFailedException  if the login failed
 	 * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public MapObjects getMapObjects() throws LoginFailedException, RemoteServerException {
+	public MapObjects getMapObjects() throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return AsyncHelper.toBlocking(getMapObjectsAsync());
 	}
 
@@ -407,8 +423,10 @@ public class Map {
 	 * @return MapObjects at your current location
 	 * @throws LoginFailedException  If login fails.
 	 * @throws RemoteServerException If request errors occurred.
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public MapObjects getMapObjects(int width) throws LoginFailedException, RemoteServerException {
+	public MapObjects getMapObjects(int width)
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return AsyncHelper.toBlocking(getMapObjectsAsync(width));
 	}
 
@@ -420,10 +438,11 @@ public class Map {
 	 * @return MapObjects in the given cells
 	 * @throws LoginFailedException  if the login failed
 	 * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	@Deprecated
 	public MapObjects getMapObjects(double latitude, double longitude)
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return getMapObjects(latitude, longitude, cellWidth);
 	}
 
@@ -436,10 +455,11 @@ public class Map {
 	 * @return MapObjects in the given cells
 	 * @throws LoginFailedException  if the login failed
 	 * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	@Deprecated
 	public MapObjects getMapObjects(List<Long> cellIds, double latitude, double longitude)
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return getMapObjects(cellIds, latitude, longitude, 0);
 	}
 
@@ -452,10 +472,11 @@ public class Map {
 	 * @return MapObjects in the given cells
 	 * @throws LoginFailedException  if the login failed
 	 * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	@Deprecated
 	public MapObjects getMapObjects(double latitude, double longitude, int width)
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return getMapObjects(getCellIds(latitude, longitude, width), latitude, longitude);
 	}
 
@@ -469,10 +490,11 @@ public class Map {
 	 * @return MapObjects in the given cells
 	 * @throws LoginFailedException  if the login failed
 	 * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	@Deprecated
 	public MapObjects getMapObjects(List<Long> cellIds, double latitude, double longitude, double altitude)
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		api.setLatitude(latitude);
 		api.setLongitude(longitude);
 		api.setAltitude(altitude);
@@ -486,8 +508,10 @@ public class Map {
 	 * @return MapObjects in the given cells
 	 * @throws LoginFailedException  if the login failed
 	 * @throws RemoteServerException When a buffer exception is thrown
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
-	public MapObjects getMapObjects(List<Long> cellIds) throws LoginFailedException, RemoteServerException {
+	public MapObjects getMapObjects(List<Long> cellIds)
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return AsyncHelper.toBlocking(getMapObjectsAsync(cellIds));
 	}
 
@@ -511,7 +535,7 @@ public class Map {
 		int size = 1 << (S2CellId.MAX_LEVEL - level);
 		int face = cellId.toFaceIJOrientation(index, jindex, null);
 
-		List<Long> cells = new ArrayList<Long>();
+		List<Long> cells = new ArrayList<>();
 
 		int halfWidth = (int) Math.floor(width / 2);
 		for (int x = -halfWidth; x <= halfWidth; x++) {
@@ -563,9 +587,10 @@ public class Map {
 	 * @return the fort details
 	 * @throws LoginFailedException  the login failed exception
 	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	public FortDetails getFortDetails(String id, double lon, double lat)
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		return AsyncHelper.toBlocking(getFortDetailsAsync(id, lon, lat));
 	}
 
@@ -576,9 +601,11 @@ public class Map {
 	 * @return the fort search response
 	 * @throws LoginFailedException  the login failed exception
 	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	@Deprecated
-	public FortSearchResponse searchFort(FortData fortData) throws LoginFailedException, RemoteServerException {
+	public FortSearchResponse searchFort(FortData fortData)
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 		FortSearchMessage reqMsg = FortSearchMessage.newBuilder()
 				.setFortId(fortData.getId())
 				.setFortLatitude(fortData.getLatitude())
@@ -606,10 +633,11 @@ public class Map {
 	 * @return the encounter response
 	 * @throws LoginFailedException  the login failed exception
 	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	@Deprecated
 	public EncounterResponse encounterPokemon(MapPokemon catchablePokemon)
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 
 		EncounterMessageOuterClass.EncounterMessage reqMsg = EncounterMessageOuterClass.EncounterMessage.newBuilder()
 				.setEncounterId(catchablePokemon.getEncounterId())
@@ -640,6 +668,7 @@ public class Map {
 	 * @return the catch pokemon response
 	 * @throws LoginFailedException  the login failed exception
 	 * @throws RemoteServerException the remote server exception
+	 * @throws CaptchaActiveException if a captcha is active and the message can't be sent
 	 */
 	@Deprecated
 	public CatchPokemonResponse catchPokemon(
@@ -648,7 +677,7 @@ public class Map {
 			double normalizedReticleSize,
 			double spinModifier,
 			ItemId pokeball)
-			throws LoginFailedException, RemoteServerException {
+			throws LoginFailedException, CaptchaActiveException, RemoteServerException {
 
 		CatchPokemonMessage reqMsg = CatchPokemonMessage.newBuilder()
 				.setEncounterId(catchablePokemon.getEncounterId())
@@ -676,12 +705,25 @@ public class Map {
 	}
 
 	/**
-	 * Wether or not to get a fresh copy or use cache;
+	 * Whether or not to get a fresh copy or use cache;
 	 *
-	 * @return true if enough time has elapsed since the last request, false otherwise
+	 * @return false if enough time has elapsed since the last request, true otherwise
 	 */
 	private boolean useCache() {
 		return (api.currentTimeMillis() - lastMapUpdate) < api.getSettings().getMapSettings().getMinRefresh();
+	}
+
+	/**
+	 * Clear map objects cache
+	 *
+	 */
+	public void clearCache() {
+		cachedCatchable.clear();
+		cachedMapObjects.getNearbyPokemons().clear();
+		cachedMapObjects.getCatchablePokemons().clear();
+		cachedMapObjects.getWildPokemons().clear();
+		cachedMapObjects.getDecimatedSpawnPoints().clear();
+		cachedMapObjects.getSpawnPoints().clear();
 	}
 
 	private List<Long> getDefaultCells() {

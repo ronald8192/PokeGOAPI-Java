@@ -38,6 +38,7 @@ import com.pokegoapi.api.gym.Gym;
 import com.pokegoapi.api.pokemon.Pokemon;
 import com.pokegoapi.auth.CredentialProvider;
 import com.pokegoapi.auth.PtcCredentialProvider;
+import com.pokegoapi.exceptions.CaptchaActiveException;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
 import com.pokegoapi.util.Log;
@@ -53,13 +54,14 @@ public class FightGymExample {
 	public static void main(String[] args) {
 		OkHttpClient http = new OkHttpClient();
 		CredentialProvider auth = null;
+		PokemonGo go = new PokemonGo(http);
 		try {
-			auth = new PtcCredentialProvider(http, ExampleLoginDetails.LOGIN, ExampleLoginDetails.PASSWORD);
+			auth = new PtcCredentialProvider(http, ExampleConstants.LOGIN, ExampleConstants.PASSWORD);
+			go.login(auth);
 			// or google
 			//auth = new GoogleCredentialProvider(http, token); // currently uses oauth flow so no user or pass needed
-			PokemonGo go = new PokemonGo(auth, http);
 			// set location
-			go.setLocation(-32.011011, 115.932831, 0);
+			go.setLocation(ExampleConstants.LATITUDE, ExampleConstants.LONGITUDE, ExampleConstants.ALTITUDE);
 
 			List<Pokemon> pokemons = go.getInventories().getPokebank().getPokemons();
 			Pokemon[] attackers = new Pokemon[6];
@@ -93,9 +95,9 @@ public class FightGymExample {
 
 			}
 
-		} catch (LoginFailedException | RemoteServerException | InterruptedException e) {
+		} catch (LoginFailedException | RemoteServerException | InterruptedException | CaptchaActiveException e) {
 			// failed to login, invalid credentials, auth issue or server issue.
-			Log.e("Main", "Failed to login or server issue: ", e);
+			Log.e("Main", "Failed to login, captcha or server issue: ", e);
 
 		}
 	}

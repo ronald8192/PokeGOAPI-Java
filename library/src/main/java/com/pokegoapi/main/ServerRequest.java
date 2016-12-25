@@ -17,9 +17,11 @@ package com.pokegoapi.main;
 
 import POGOProtos.Networking.Requests.RequestOuterClass;
 import POGOProtos.Networking.Requests.RequestTypeOuterClass;
+
 import com.google.protobuf.ByteString;
 import com.google.protobuf.GeneratedMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
+
 import lombok.Getter;
 
 /**
@@ -32,6 +34,8 @@ public class ServerRequest {
 	@Getter
 	private RequestTypeOuterClass.RequestType type;
 	private ByteString data;
+	@Getter
+	private boolean requireCommon;
 
 	/**
 	 * Instantiates a new Server request.
@@ -50,8 +54,8 @@ public class ServerRequest {
 	/**
 	 * Instantiates a new Server request.
 	 *
-	 * @param type the type
-	 * @param request  the req
+	 * @param type    the type
+	 * @param request the req
 	 */
 	ServerRequest(RequestTypeOuterClass.RequestType type, RequestOuterClass.Request request) {
 		this.request = request;
@@ -78,5 +82,14 @@ public class ServerRequest {
 			throw new InvalidProtocolBufferException("Contents of buffer are null");
 		}
 		return data;
+	}
+
+	/**
+	 * Adds a common request to this request
+	 * @return this object
+	 */
+	public ServerRequest withCommons() {
+		this.requireCommon = true;
+		return this;
 	}
 }

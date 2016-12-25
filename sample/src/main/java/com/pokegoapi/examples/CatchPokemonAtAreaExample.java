@@ -31,12 +31,15 @@
 package com.pokegoapi.examples;
 
 
-import POGOProtos.Networking.Envelopes.RequestEnvelopeOuterClass;
 import com.pokegoapi.api.PokemonGo;
+import com.pokegoapi.api.inventory.Pokeball;
 import com.pokegoapi.api.map.pokemon.CatchResult;
 import com.pokegoapi.api.map.pokemon.CatchablePokemon;
 import com.pokegoapi.api.map.pokemon.encounter.EncounterResult;
+import com.pokegoapi.api.settings.CatchOptions;
+import com.pokegoapi.api.settings.PokeballSelector;
 import com.pokegoapi.auth.PtcCredentialProvider;
+import com.pokegoapi.exceptions.CaptchaActiveException;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.NoSuchItemException;
 import com.pokegoapi.exceptions.RemoteServerException;
@@ -49,39 +52,52 @@ public class CatchPokemonAtAreaExample {
 
 	/**
 	 * Catches a pokemon at an area.
-     * @param args args
+	 *
+	 * @param args args
 	 */
 	public static void main(String[] args) {
 		OkHttpClient http = new OkHttpClient();
-		RequestEnvelopeOuterClass.RequestEnvelope.AuthInfo auth = null;
+		PokemonGo go = new PokemonGo(http);
 		try {
+			go.login(new PtcCredentialProvider(http, ExampleConstants.LOGIN,
+					ExampleConstants.PASSWORD));
 			//or google
 			//new PokemonGo(GoogleCredentialProvider(http,listner));
 			//Subsiquently
 			//new PokemonGo(GoogleCredentialProvider(http,refreshtoken));
-			PokemonGo go = new PokemonGo(new PtcCredentialProvider(http, ExampleLoginDetails.LOGIN,
-					ExampleLoginDetails.PASSWORD), http);
 			// set location
-			go.setLocation(-32.058087, 115.744325, 0);
+			go.setLocation(ExampleConstants.LATITUDE, ExampleConstants.LONGITUDE, ExampleConstants.ALTITUDE);
 
 			List<CatchablePokemon> catchablePokemon = go.getMap().getCatchablePokemon();
-			System.out.println("Pokemon in area:" + catchablePokemon.size());
+			System.out.println("Pokemon in area: " + catchablePokemon.size());
 
 			for (CatchablePokemon cp : catchablePokemon) {
 				// You need to Encounter first.
 				EncounterResult encResult = cp.encounterPokemon();
 				// if encounter was succesful, catch
 				if (encResult.wasSuccessful()) {
-					System.out.println("Encounted:" + cp.getPokemonId());
-					CatchResult result = cp.catchPokemonWithRazzBerry();
-					System.out.println("Attempt to catch:" + cp.getPokemonId() + " " + result.getStatus());
+					System.out.println("Encountered: " + cp.getPokemonId());
+					CatchOptions options = new CatchOptions(go)
+							.useRazzberry(true)
+							.withPokeballSelector(PokeballSelector.SMART);
+					List<Pokeball> useablePokeballs = go.getInventories().getItemBag().getUseablePokeballs();
+					double probability = cp.getCaptureProbability();
+					if (useablePokeballs.size() > 0) {
+						Pokeball pokeball = PokeballSelector.SMART.select(useablePokeballs, probability);
+						System.out.println("Attempting to catch: " + cp.getPokemonId() + " with " + pokeball
+								+ " (" + probability + ")");
+						CatchResult result = cp.catchPokemon(options);
+						System.out.println("Result:" + result.getStatus());
+					} else {
+						System.out.println("Skipping Pokemon, we have no Pokeballs!");
+					}
 				}
 
 			}
 
-		} catch (LoginFailedException | NoSuchItemException | RemoteServerException e) {
+		} catch (LoginFailedException | NoSuchItemException | RemoteServerException | CaptchaActiveException e) {
 			// failed to login, invalid credentials, auth issue or server issue.
-			Log.e("Main", "Failed to login or server issue: ", e);
+			Log.e("Main", "Failed to login, captcha or server issue: ", e);
 
 		}
 	}

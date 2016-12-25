@@ -18,12 +18,22 @@ package com.pokegoapi.api.pokemon;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
-@Data 
+@Data
 @AllArgsConstructor
 public class HatchedEgg {
-	
+
 	private Long id;
-	private int	experience;
-	private int	candy;
+	private int experience;
+	private int candy;
 	private int stardust;
+
+	@Override
+	public int hashCode() {
+		return id.intValue();
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return obj instanceof HatchedEgg && ((HatchedEgg) obj).id.equals(id);
+	}
 }

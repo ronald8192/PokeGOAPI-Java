@@ -16,41 +16,49 @@
 package com.pokegoapi.examples;
 
 import com.pokegoapi.util.Log;
-import com.pokegoapi.util.PokeNames;
+import com.pokegoapi.util.PokeDictionary;
 
 import java.util.Locale;
+import java.util.MissingResourceException;
+
+import static com.pokegoapi.util.PokeDictionary.supportedLocales;
 
 public class DisplayPokenameExample {
 
 	/**
 	 * Displays All 151 Pokemon Names for all Supported Locales
+	 *
 	 * @param args Not used
 	 */
 	public static void main(String[] args) {
-		Locale[] supportedLocales = {
-				Locale.FRENCH,
-				Locale.GERMAN,
-				Locale.ENGLISH,
-				Locale.JAPANESE,
-				new Locale("zh", "CN"),
-				new Locale("zh", "HK"),
-				new Locale("ru"),
-		};
 		for (int i = 1; i < 152; i++) {
 			//Showcase for Supported Languages
 			for (Locale l : supportedLocales) {
-				Log.d("Names-Example", String.format(
-						l,
-						"Pokedex Nr# %d is %s in %s",
-						i,
-						PokeNames.getDisplayName(i, l),
-						l.getDisplayName(l)));
+				try {
+					System.out.println(String.format(
+							l,
+							"%s: Pokedex #%d is %s\n    %s",
+							l.getDisplayName(l),
+							i,
+							PokeDictionary.getDisplayName(i, l),
+							PokeDictionary.getDisplayDescription(i, l)));
+				} catch (MissingResourceException e) {
+					Log.e("Main", "Unable to find Pokemon name with given Pokedex: " + i, e);
+				}
 			}
 			//Showcase for Fallback Behaviour
-			Log.d("Names-Example", String.format(
-					"Pokedex Nr# %d is %s in %s",
-					i,
-					PokeNames.getDisplayName(i, new Locale("xx")), "Fallback"));
+			try {
+				System.out.println(String.format(
+						"%s: Pokedex# %d is %s\n    %s",
+						"Fallback",
+						i,
+						PokeDictionary.getDisplayName(i, new Locale("xx")),
+						PokeDictionary.getDisplayDescription(i, new Locale("xx"))));
+			} catch (MissingResourceException e) {
+				Log.e("Main", "Unable to find Pokemon name with given Pokedex: ", e);
+			}
+			System.out.println();
 		}
+
 	}
 }

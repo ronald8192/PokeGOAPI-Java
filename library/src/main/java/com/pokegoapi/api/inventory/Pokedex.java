@@ -17,40 +17,43 @@ package com.pokegoapi.api.inventory;
 
 import POGOProtos.Data.PokedexEntryOuterClass.PokedexEntry;
 import POGOProtos.Enums.PokemonIdOuterClass.PokemonId;
-import com.pokegoapi.api.PokemonGo;
 
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
 
 public class Pokedex {
+	private final Map<PokemonId, PokedexEntry> pokedexMap =
+			Collections.synchronizedMap(new EnumMap<PokemonId, PokedexEntry>(PokemonId.class));
+	private final Object lock = new Object();
 
-	private PokemonGo api;
-	private Map<PokemonId, PokedexEntry> pokedexMap = new EnumMap<>(PokemonId.class);
-
-	public Pokedex(PokemonGo pgo) {
-		reset(pgo);
-	}
-
-	public void reset(PokemonGo pgo) {
-		this.api = pgo;
-		pokedexMap = new EnumMap<PokemonId, PokedexEntry>(PokemonId.class);
+	public void reset() {
+		synchronized (this.lock) {
+			pokedexMap.clear();
+		}
 	}
 
 	/**
 	 * Add/Update a PokdexEntry.
+	 *
 	 * @param entry The entry to add or update
 	 */
 	public void add(PokedexEntry entry) {
 		PokemonId id = PokemonId.forNumber(entry.getPokemonId().getNumber());
-		pokedexMap.put(id, entry);
+		synchronized (this.lock) {
+			pokedexMap.put(id, entry);
+		}
 	}
 
 	/**
 	 * Get a pokedex entry value.
+	 *
 	 * @param pokemonId the ID of the pokemon to get
 	 * @return Entry if in pokedex or null if it doesn't
 	 */
 	public PokedexEntry getPokedexEntry(PokemonId pokemonId) {
-		return pokedexMap.get(pokemonId);
+		synchronized (this.lock) {
+			return pokedexMap.get(pokemonId);
+		}
 	}
 }

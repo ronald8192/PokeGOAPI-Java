@@ -1397,13 +1397,22 @@ public class PokemonMoveMetaRegistry {
 		metam.setEnergy(12);
 		meta.put(PokemonMove.ROCK_SMASH_FAST, metam);
 
+		metam = new PokemonMoveMeta();
+		metam.setMove(PokemonMove.TRANSFORM_FAST);
+		metam.setType(PokemonType.NORMAL);
+		metam.setPower(0); // All following stats are just guesses. Fix if possible.
+		metam.setAccuracy(1);
+		metam.setCritChance(0);
+		metam.setTime(1000);
+		metam.setEnergy(0);
+		meta.put(PokemonMove.TRANSFORM_FAST, metam);
+
 	}
 
 	/**
 	 * Return PokemonMoveMeta object containing meta info about a pokemon move.
 	 *
-	 * @param id
-	 *            the id of the pokemon move
+	 * @param id the id of the pokemon move
 	 * @return PokemonMoveMeta
 	 */
 	public static PokemonMoveMeta getMeta(PokemonMove id) {
